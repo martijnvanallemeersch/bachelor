@@ -1,0 +1,186 @@
+﻿using Skyline.DataMiner.Net;
+using Skyline.DataMiner.Net.Messages;
+using Skyline.DataMiner.Net.Messages.Advanced;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+
+namespace DevRegTest.domainAutomationScript.Report
+{
+    public class MakeTrendAndAssignElement
+    { 
+        public int DMA_ID { get; set; }
+
+        public bool TaskManagerEnabled { get; set; }
+
+        public bool TrendCacheEnabled { get; set; }
+
+        public bool ReturnValue { get; set; }
+
+        public MakeTrendAndAssignElement(int ID_DMA)
+        {
+            DMA_ID = ID_DMA;
+            TaskManagerEnabled = false;
+            TrendCacheEnabled = false;
+            ReturnValue = false;
+        }
+
+        private DMSMessage[] GetInMessage(RemotingConnection Conn)
+        {
+            GetInfoMessage infoMessage = new GetInfoMessage();
+            infoMessage.DataMinerID = DMA_ID;
+            infoMessage.Type = InfoType.ElementInfo;
+
+            DMSMessage[] resp = Conn.HandleMessage(infoMessage);
+            return resp;
+        }
+
+        private GetTrendingTemplateInfoResponseMessage GetTrendPairs(ElementInfoEventMessage mess, RemotingConnection Conn)
+        {
+            GetTrendingTemplateInfoMessage GTTIM = new GetTrendingTemplateInfoMessage(mess.Protocol, mess.ProtocolVersion, mess.Trending);
+            //GetTrendingTemplateInfoMessage g = new GetTrendingTemplateInfoMessage("Microsoft Platform", "3.0.0.2", "");
+            DMSMessage[] resp = Conn.HandleMessage(GTTIM);
+            return (GetTrendingTemplateInfoResponseMessage)resp[0];
+        }
+
+        public void DoIt(RemotingConnection connectie)
+        {
+            DMSMessage[] infMessages = GetInMessage(connectie);      
+
+            for (int aantal = 0; aantal < infMessages.Length; aantal++)
+            { 
+                ElementInfoEventMessage tempMes = (ElementInfoEventMessage)infMessages[aantal];
+
+                //check if an element name = Trend if so assing Microsoft Platform Template1 to it.
+                if (tempMes.Name == "TrendRegressionTester")
+                {
+                    // make new Microsoft Platform Trend Template (Template 4) with CPU... enabled form measuring.
+                    UpdateTrendTemplateMessage trend = new UpdateTrendTemplateMessage();
+
+                    GetTrendingTemplateInfoResponseMessage templates = GetTrendPairs(tempMes, connectie);
+
+                    trend.OriginalName = "TemplateRegressionTester";
+                    trend.UpdateType = UpdateTrendTemplateType.Update;
+                    trend.Definition = new GetTrendingTemplateInfoResponseMessage();
+                    trend.Definition.Name = "TemplateRegressionTester";
+                    trend.Definition.Protocol = "Microsoft Platform";
+                    trend.Definition.Version = "3.0.0.2";
+                    // Parameter ID of all the parameters of the Microsoft Platform like CPU, Threads etc..
+                    int[] ParametersMicrosoftPlatform = new int[] { 350, 98, 100, 101, 104, 107, 152, 267, 268, 271, 278, 1017, 1018, 1019 };
+                    ParamTrendingInfo[] Parameters = new ParamTrendingInfo[ParametersMicrosoftPlatform.Length];
+
+                    for (int index = 0; index < ParametersMicrosoftPlatform.Length; index++)
+                    {
+                        Parameters[index] = new ParamTrendingInfo { ParameterID = ParametersMicrosoftPlatform[index], RealTimeTrended = true, Filter = "*" };
+                    }
+
+                    trend.Definition.Parameters = Parameters;
+
+                    DMSMessage resp = connectie.HandleSingleResponseMessage(trend);
+
+                    AssignTemplatesMessage assignTrendTemplate = new AssignTemplatesMessage(DMA_ID, tempMes.ElementID, "", "TemplateRegressionTester");
+                    assignTrendTemplate.HostingDataMinerID = DMA_ID;
+
+                    DMSMessage assignResponse = connectie.HandleSingleResponseMessage(assignTrendTemplate);
+
+                    ManualResetEventSlim wait = new ManualResetEventSlim(false);
+                    wait.Wait(500);                  
+
+                    SetSLNetConfigValue scv = new SetSLNetConfigValue(DMA_ID, new SLNetConfigValue("TrendCacheEnable", "false"));
+                    connectie.HandleSingleResponseMessage(scv);
+
+                    //enable TrendCacheEnable and wait  
+                    while (TrendCacheEnabled == false)
+                    {
+                        GetSLNetConfigValues message = new GetSLNetConfigValues(DMA_ID);
+                        SLNetConfigValuesResponse response = connectie.HandleSingleResponseMessage(message) as SLNetConfigValuesResponse;
+
+                        if (response.FindValue("TrendCacheEnable").ToString().ToLower() == "false")
+                        {
+                            TrendCacheEnabled = true;
+                        }
+                        else if (response.FindValue("TrendCacheEnable").ToString().ToLower() == "true")
+                        {
+                            SetSLNetConfigValue scv2 = new SetSLNetConfigValue(DMA_ID, new SLNetConfigValue("TrendCacheEnable", "false"));
+                            connectie.HandleSingleResponseMessage(scv2);
+                        }
+
+                        ManualResetEventSlim wait2 = new ManualResetEventSlim(false);
+                        wait2.Wait(500);
+                    }
+
+                    ManualResetEventSlim wait4 = new ManualResetEventSlim(false);
+                    wait4.Wait(500);
+                }
+            }                 
+        }        
+
+        public bool CheckIfPollTaskManagerIsEnalbled(RemotingConnection connectie, bool cmdOurUiArg)
+        {
+            DMSMessage[] infMessages = GetInMessage(connectie);
+
+            for (int aantal = 0; aantal < infMessages.Length; aantal++)
+            {
+                ElementInfoEventMessage tempMes = (ElementInfoEventMessage)infMessages[aantal];
+
+                //check if an element name = Trend if so assing Microsoft Platform Template1 to it.
+                if (tempMes.Name == "TrendRegressionTester")
+                {
+                    //enable Poll task Manager in Trend template so that he starts measuring CPU ...   
+                    while (TaskManagerEnabled == false)
+                    {
+                        try
+                        {
+                            GetParameterMessage gpm = new GetParameterMessage(DMA_ID, tempMes.ElementID, 372);
+                            GetParameterResponseMessage gprm = connectie.HandleSingleResponseMessage(gpm) as GetParameterResponseMessage;
+                            if (gprm.DisplayValue == "Disabled")
+                            {
+                                SetParameterMessage msg2 = new SetParameterMessage(DMA_ID, tempMes.ElementID, 373, 1, "1", ParameterValueType.String);
+                                connectie.HandleSingleResponseMessage(msg2);
+                                ReturnValue = false;
+                            }
+                            else if (gprm.DisplayValue == "Enabled")
+                            {
+                                TaskManagerEnabled = true;
+                                ReturnValue = true;
+                            }
+
+                            ManualResetEventSlim wait2 = new ManualResetEventSlim(false);
+<<<<<<< HEAD
+                            wait2.Wait(500);                       
+                        }                      
+=======
+                            wait2.Wait(500);                            
+                        }
+                       
+>>>>>>> 79c7a1418d170db9c09e7cce04236bea26d33e83
+                        catch (Exception ex)
+                        {
+                            if (cmdOurUiArg == true)
+                            {     
+                                using (System.IO.StreamWriter file = File.AppendText(@"C:\RegressionTester_Skyline\Current_Test\General_Information\Log.txt"))
+                                {
+                                    file.WriteLine(DateTime.Now + ex.InnerException.ToString());
+                                }
+                            }
+                            else
+                            {
+                                App.CommandLog(String.Format("{0}: {1} ({2})", DateTime.Now, "Failed to GetParameterElement", ex.Message));
+                            }
+
+                            TaskManagerEnabled = true;
+                            ReturnValue = false;
+                        }
+                    }
+                }
+            }
+            return ReturnValue;
+        }
+    }      
+}
+

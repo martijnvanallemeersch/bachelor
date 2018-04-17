@@ -1,0 +1,50 @@
+﻿using Skyline.DataMiner.Net.Messages;
+using Skyline.DataMiner.Net.Messages.Advanced;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
+using DevRegTest.domainVMApp;
+using System.Management.Automation;
+using Skyline.DataMiner.Net;
+using System.Windows;
+
+namespace DevRegTest.domainAutomationScript.Report
+{
+    class GetID
+    {
+        public GetDataMinerInfoResponseMessage GetInfoMessage(RemotingConnection connectie, bool cmdOurUiArg)
+        {
+            try
+            {
+                GetInfoMessage infoMessage = new GetInfoMessage();
+                infoMessage.Type = InfoType.DataMinerInfo;
+
+                GetDataMinerInfoResponseMessage mesg =
+                    (GetDataMinerInfoResponseMessage)connectie.HandleSingleResponseMessage(infoMessage);
+
+                return mesg;
+            }
+            catch(Exception ex)
+            {
+                if(cmdOurUiArg == true)
+                {   
+                    LoggingErrors.AddExceptionToList(DateTime.Now.ToString() + "Problem get DMA ID. " + ex.Message);
+                }
+                else
+                {
+                    App.CommandLog(String.Format("{0}: {1} ({2})", DateTime.Now, "Problem get DMA ID", ex.Message));
+<<<<<<< HEAD
+                }
+=======
+                }                
+>>>>>>> 9509e2c76149e7b4d740a75479414ebf67487eee
+
+                return null;
+            }
+        }
+    }
+}

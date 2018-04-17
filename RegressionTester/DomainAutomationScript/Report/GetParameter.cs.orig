@@ -1,0 +1,279 @@
+﻿using Skyline.DataMiner.Net.Messages;
+using Skyline.DataMiner.Net.Messages.Advanced;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
+using DevRegTest.domainVMApp;
+using System.Management.Automation;
+using System.Threading;
+using Skyline.DataMiner.Net;
+using DevRegTest;
+
+namespace VMApp.domainAutomationScript.Report
+{
+    public class GetParameter
+    {
+        public DMA DMAVU_GetParameters { get; set; }
+        
+        //Keeps a list of SL processes that have to be checked.
+        public IList<String> TableIndicesSLProcesses { get; set; }
+
+        public int DMA_ID { get; set; }
+
+        public DateTime[] TimingScript { get; set; }
+
+        public GetParameter(Machine machine, int ID_DMA, DateTime[] TimingScriptArg)
+        {   
+            TableIndicesSLProcesses = new List<String>();
+            
+            TableIndicesSLProcesses.Add("SLAnalytics.0");
+            TableIndicesSLProcesses.Add("SLASPConnection.0");
+            TableIndicesSLProcesses.Add("SLAutomation.0");
+            TableIndicesSLProcesses.Add("SLDataGateway.0");
+            TableIndicesSLProcesses.Add("SLDataMiner.0");
+            TableIndicesSLProcesses.Add("SLDMS.0");
+            TableIndicesSLProcesses.Add("SLElement.0");
+            TableIndicesSLProcesses.Add("SLLog.0");
+            TableIndicesSLProcesses.Add("SLNet.0");
+            TableIndicesSLProcesses.Add("SLNetCOMService.0");
+            TableIndicesSLProcesses.Add("SLPort.0");
+            TableIndicesSLProcesses.Add("SLProtocol.0");
+            TableIndicesSLProcesses.Add("SLScheduler.0");
+            TableIndicesSLProcesses.Add("SLScripting.0");
+            TableIndicesSLProcesses.Add("SLSNMPAgent.0");
+            TableIndicesSLProcesses.Add("SLSNMPManager.0");
+            TableIndicesSLProcesses.Add("SLSpectrum.0");
+            TableIndicesSLProcesses.Add("SLTaskbarUtility.0");
+            TableIndicesSLProcesses.Add("SLWatchDog.0");
+            TableIndicesSLProcesses.Add("SLXML.0");
+
+            DMA_ID = ID_DMA;
+            
+            DMAVU_GetParameters = new DMA();
+
+            TimingScript = TimingScriptArg;
+        }
+
+        public void Execute(string DestinationPath, RemotingConnection connectie)
+        {
+            try
+            {
+                GenerateXML(DestinationPath, connectie);
+            }
+            catch(Exception ex)
+            {
+                LoggingErrors.AddExceptionToList(DateTime.Now.ToString() + ": " + ex.ToString() + ".");
+            }
+        }
+
+        //Retrevies general info for other messages
+        private DMSMessage[] GetInMessage(Connection Conn)
+        {
+            GetInfoMessage infoMessage = new GetInfoMessage();
+            infoMessage.DataMinerID = DMA_ID;
+            infoMessage.Type = InfoType.ElementInfo;
+
+            DMSMessage[] resp = Conn.HandleMessage(infoMessage);
+            return resp;
+        }
+
+        // Retrieves trend info from an element
+        private GetTrendingTemplateInfoResponseMessage GetTrendPairs(ElementInfoEventMessage mess, Connection Conn)
+        {
+            GetTrendingTemplateInfoMessage GTTIM = new GetTrendingTemplateInfoMessage(mess.Protocol, mess.ProtocolVersion, mess.Trending);
+
+            DMSMessage[] resp = Conn.HandleMessage(GTTIM);
+            return (GetTrendingTemplateInfoResponseMessage)resp[0];
+        }  
+
+        //Is needed to link the parameter id with a name
+        private GetElementProtocolResponseMessage GetProtocol(ElementInfoEventMessage mess, Connection Conn)
+        {
+            GetElementProtocolMessage GEPM = new GetElementProtocolMessage(mess.DataMinerID, mess.ElementID);
+            DMSMessage[] resp = Conn.HandleMessage(GEPM);
+            return (GetElementProtocolResponseMessage)resp[0];
+        }
+
+        //Builds an XML out of the get trend data message
+        public void GenerateXML(string destinationPath, Connection c)
+        {
+            try
+            {
+                GetTrendDataMessage trendDataMessage = new GetTrendDataMessage();
+
+                if (TimingScript[0].ToUniversalTime().ToLocalTime() > TimingScript[1].ToUniversalTime().ToLocalTime())
+                {
+                    trendDataMessage.StartTime = TimingScript[1].ToUniversalTime().ToLocalTime();
+                    trendDataMessage.EndTime = TimingScript[1].ToUniversalTime().ToLocalTime();
+                }
+                else
+                {
+                    trendDataMessage.StartTime = TimingScript[0].ToUniversalTime().ToLocalTime();
+                    trendDataMessage.EndTime = TimingScript[1].ToUniversalTime().ToLocalTime();
+                }
+
+                trendDataMessage.HostingDataMinerID = DMA_ID;
+                trendDataMessage.DataMinerID = DMA_ID;
+                //trendDataMessage.Raw = true;    //This will make that you get one point of data less but it is beter for the developers
+                trendDataMessage.TrendOption = TrendOptions.NoFill; //This must be here, otherwise you have one point less!!
+
+                DMSMessage[] infMessages = GetInMessage(c);
+
+                DMAVU_GetParameters.CreateDirectory(destinationPath + "\\TrendData\\");
+
+                for (int aantal = 0; aantal < infMessages.Length; aantal++)
+                {
+                    ElementInfoEventMessage tempMes = (ElementInfoEventMessage)infMessages[aantal];
+                    GetTrendingTemplateInfoResponseMessage templates = GetTrendPairs(tempMes, c);
+                    GetElementProtocolResponseMessage protocol = GetProtocol(tempMes, c);
+
+                    //trendDataMessage.ReturnAsObjects = true;
+                    trendDataMessage.ElementID = tempMes.ElementID;
+                    trendDataMessage.Fields = new string[] { "iPid", "chIndex", "iStatus", "dtFirst", "chValue" };
+                    trendDataMessage.TrendingType = TrendingType.Realtime;
+                    XmlDocument ElementInfo = new XmlDocument();
+
+                    //This must change to foreach parameterindexpair in trended template
+
+                    XmlElement rootElement = ElementInfo.CreateElement("127.0.0.1");
+
+                    // if the element has a Trend make a XML with trend info else not
+                    if (templates != null)
+                    {
+                        XmlDocument document = new XmlDocument();
+
+                        //This must change to foreach parameterindexpair in trended template
+
+                        XmlElement rootElementDocu = document.CreateElement("127.0.0.1");
+
+                        IEnumerable<ParamTrendingInfo> tempLMist = templates.Parameters.Where(p => p.RealTimeTrended == true);
+
+                        foreach (ParamTrendingInfo info in templates.Parameters.Where(p => p.RealTimeTrended == true))
+                        {
+                            trendDataMessage.Parameters = new ParameterIndexPair[] { new ParameterIndexPair(info.ParameterID) };
+                            string nameOfProtocol = protocol.AllParameters.Where(pi => pi.ID == info.ParameterID).FirstOrDefault().Name;
+
+                            if (!nameOfProtocol.Contains('('))
+                            {
+                                nameOfProtocol = nameOfProtocol.Replace(" ", String.Empty);
+                                nameOfProtocol = nameOfProtocol.Replace("/", "");
+                                XmlElement ParameterNameTrend = document.CreateElement(nameOfProtocol);
+
+                                //Will pull data from all processes out of the TableIndicesSLProcesses
+                                if (info.Filter == "*")
+                                {
+                                    for (int aantPara = 0; aantPara < TableIndicesSLProcesses.Count; aantPara++)
+                                    {
+                                        trendDataMessage.Parameters = new ParameterIndexPair[] { new ParameterIndexPair(info.ParameterID, TableIndicesSLProcesses[aantPara]) };
+                                        trendDataMessage.DateTimeUTC = false;
+                                        GetTrendDataResponseMessage response = (GetTrendDataResponseMessage)c.HandleMessage(trendDataMessage)[0];
+                                        DMSMessage[] allResponses = c.HandleMessage(trendDataMessage);
+                                        XmlElement procesElementTrend = document.CreateElement(TableIndicesSLProcesses[aantPara]);
+
+
+                                        for (int i = 0; i < response.Values.Length; i += 5)
+                                        {
+                                            XmlElement TimeStamp = document.CreateElement("TimeStamp");
+                                            TimeStamp.InnerText = response.Values[i + 3] + "";
+
+                                            procesElementTrend.AppendChild(TimeStamp);
+
+                                            XmlElement Value = document.CreateElement("Value");
+                                            Value.InnerText = response.Values[i + 4] + "";
+
+                                            procesElementTrend.AppendChild(Value);
+                                        }
+
+
+                                        ParameterNameTrend.AppendChild(procesElementTrend);
+                                    }
+                                    rootElementDocu.AppendChild(ParameterNameTrend);
+                                }
+                                // No process has to be chosen
+                                else
+                                {
+                                    trendDataMessage.Parameters = new ParameterIndexPair[] { new ParameterIndexPair(info.ParameterID) };
+
+                                    GetTrendDataResponseMessage response = (GetTrendDataResponseMessage)c.HandleMessage(trendDataMessage)[0];
+
+                                    for (int i = 0; i < response.Values.Length; i += 2)
+                                    {
+                                        XmlElement TimeStamp = document.CreateElement("TimeStamp");
+                                        TimeStamp.InnerText = response.Values[i] + "";
+
+                                        ParameterNameTrend.AppendChild(TimeStamp);
+
+                                        XmlElement Value = document.CreateElement("Value");
+                                        Value.InnerText = response.Values[i + 1] + "";
+
+                                        ParameterNameTrend.AppendChild(Value);
+                                    }
+
+                                    rootElementDocu.AppendChild(ParameterNameTrend);
+                                }
+                            }
+                        }
+
+                        document.AppendChild(rootElementDocu);
+
+                        //make directory C:\Evaluatie aan en kopieert daar alle logging files 
+                        //van de DMA en de opgevraagde Trend XML.
+                        document.Save(destinationPath + "\\TrendData\\" + tempMes.Name + ".XML");
+                    }
+
+                    // make a XML with a little info of every element.
+                    string TempMesName = tempMes.Name;
+                    TempMesName = TempMesName.Replace(" ", "");
+
+                    XmlElement ParameterName = ElementInfo.CreateElement(TempMesName);
+
+                    XmlElement procesElement = ElementInfo.CreateElement("DataminerID");
+
+                    procesElement.InnerText = tempMes.DataMinerID.ToString();
+
+                    XmlElement ElementId = ElementInfo.CreateElement("ElementID");
+
+                    ElementId.InnerText = tempMes.ElementID.ToString();
+
+                    XmlElement NameProtocol = ElementInfo.CreateElement("NaamProtocol");
+
+                    NameProtocol.InnerText = tempMes.Protocol.ToString();
+
+                    XmlElement ProtocolType = ElementInfo.CreateElement("ProtolcolType");
+
+                    ProtocolType.InnerText = tempMes.ProtocolType.ToString();
+
+                    ParameterName.AppendChild(procesElement);
+                    ParameterName.AppendChild(ElementId);
+                    ParameterName.AppendChild(NameProtocol);
+                    ParameterName.AppendChild(ProtocolType);
+
+                    rootElement.AppendChild(ParameterName);
+
+                    ElementInfo.AppendChild(rootElement);
+
+                    // To generate info on C: drive
+                    DMAVU_GetParameters.CreateDirectory(destinationPath + "\\ElementInfo\\");
+
+                    if (File.Exists(destinationPath + "\\ElementInfo\\" + tempMes.Name + ".XML"))
+                    {
+                        File.Delete(destinationPath + "\\ElementInfo\\" + tempMes.Name + ".XML");
+                    }
+                    ElementInfo.Save(destinationPath + "\\ElementInfo\\" + tempMes.Name + ".XML");
+                }
+            }
+            catch (Exception ex)
+            {
+<<<<<<< HEAD
+                LoggingErrors.AddExceptionToList(String.Format("{0}: {1} ({2})", DateTime.Now.ToString(), ": Could not generate Xml with parameters ", ex.ToString()));
+=======
+                LoggingErrors.AddExceptionToList(DateTime.Now.ToString() + " Could not generate Xml with parameters "  + destinationPath + Environment.NewLine + ex.ToString());
+>>>>>>> b93e0ee288f20a89917b0fdbfd98ab4e61186267
+            }
+        }
+    }
+}

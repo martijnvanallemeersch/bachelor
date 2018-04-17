@@ -1,0 +1,17 @@
+C:\devcore3\tools\RegressionTester\RegressionTester\bin\Debug\DevRegTest.exe.config
+C:\devcore3\tools\RegressionTester\RegressionTester\bin\Debug\DevRegTest.exe
+C:\devcore3\tools\RegressionTester\RegressionTester\bin\Debug\DevRegTest.pdb
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\App.g.cs
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\MainWindow.g.cs
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest_Content.g.cs
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\GeneratedInternalTypeHelper.g.cs
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest_MarkupCompile.cache
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest_MarkupCompile.lref
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\App.baml
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\MainWindow.baml
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\Themes\Generic.baml
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest.g.resources
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest.Properties.Resources.resources
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest.csproj.GenerateResource.Cache
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest.exe
+C:\devcore3\tools\RegressionTester\RegressionTester\obj\Debug\DevRegTest.pdb

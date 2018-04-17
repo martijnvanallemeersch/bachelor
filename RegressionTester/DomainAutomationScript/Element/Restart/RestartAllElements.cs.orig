@@ -1,0 +1,67 @@
+﻿using Skyline.DataMiner.Net;
+using Skyline.DataMiner.Net.Messages;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+
+namespace DevRegTest.domainAutomationScript.Element.Restart
+{
+    public class RestartAllElements
+    {
+        public int DMA_ID { get; set; }
+
+        public bool ReturnValueRestartAllElements { get; set; }
+
+        private DMSMessage[] GetInMessage(RemotingConnection Conn)
+        {
+            GetInfoMessage infoMessage = new GetInfoMessage();
+            infoMessage.DataMinerID = DMA_ID;
+            infoMessage.Type = InfoType.ElementInfo;
+
+            DMSMessage[] resp = Conn.HandleMessage(infoMessage);
+            return resp;
+        }
+
+        public RestartAllElements(int ID_DMA)
+        {
+            DMA_ID = ID_DMA;
+            ReturnValueRestartAllElements = false;
+        }
+
+        public bool Execute(RemotingConnection Conn)
+        {
+            try
+            {
+                DMSMessage[] infMessages = GetInMessage(Conn);
+
+                for (int aantal = 0; aantal < infMessages.Length; aantal++)
+                {
+                    ElementInfoEventMessage tempMes = (ElementInfoEventMessage)infMessages[aantal];
+
+                    SetElementStateMessage setElementStateMessage = new SetElementStateMessage();
+                    setElementStateMessage.DataMinerID = tempMes.DataMinerID;
+                    setElementStateMessage.ElementId = tempMes.ElementID;
+                    setElementStateMessage.HostingDataMinerID = DMA_ID;
+                    setElementStateMessage.State = ElementState.Restart;
+
+                    DMSMessage resp = Conn.HandleSingleResponseMessage(setElementStateMessage);
+                }
+                ReturnValueRestartAllElements = true;
+            }
+            catch (Exception ex)
+            {
+                LoggingErrors.AddExceptionToList(String.Format("{0}: {1} ({2})", DateTime.Now, "Fail!", ex.Message));
+<<<<<<< HEAD
+
+                ReturnValueRestartAllElements = false;
+=======
+>>>>>>> 2990b42ddf532a4433d770164e4c7afacdc04818
+            }
+
+            return ReturnValueRestartAllElements;
+        }
+    }
+}
